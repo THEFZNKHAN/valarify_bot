@@ -71,11 +71,13 @@ async def handle_message(update: Update, context):
             response: str = await get_data(song_id)
             logger.info('Bot: %s', response)
             await update.message.reply_text(response)
-    else:
-        song_id: str = search_id(text)
-        response: str = await get_data(song_id)
-        logger.info('Bot: %s', response)
-        await update.message.reply_text(response)
+        # Return to avoid processing the same message in non-group chats
+        return
+    # Handle messages in non-group chats
+    song_id: str = search_id(text)
+    response: str = await get_data(song_id)
+    logger.info('Bot: %s', response)
+    await update.message.reply_text(response)
 
 # ERROR
 async def error(update: Update, context):
