@@ -6,8 +6,16 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from dotenv import load_dotenv
 from spotipy.oauth2 import SpotifyClientCredentials
+import logging
 
 load_dotenv()
+
+# Constants
+BOT_USERNAME: Final = os.getenv("VALARIFY_BOT_USERNAME")
+
+# Logging configuration
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # START COMMAND
 async def start_cmd(update: Update, context):
@@ -15,23 +23,23 @@ async def start_cmd(update: Update, context):
 
 # FIND SEARCH ID OF SONGS
 def search_id(name: str) -> str:
-    client_credentials_manager = SpotifyClientCredentials(client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET)
+    client_credentials_manager = SpotifyClientCredentials(client_id=os.getenv("SPOTIFY_C_ID"), client_secret=os.getenv("SPOTIFY_C_SECRET"))
     sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
 
     results = sp.search(q=name, type='track')
 
     if len(results['tracks']['items']) > 0:
         track_id = results['tracks']['items'][0]['id']
-        print("Track ID:", track_id)
+        logger.info("Track ID: %s", track_id)
         return track_id
     else:
-        print("Track not found.")
+        logger.info("Track not found.")
         return ""
 
 # GET THE SONG DOWNLOAD URL BY API
 async def get_data(id: str) -> str:
     try:
-        url = f"{VALARIFY_API}/{id}"
+        url = f"{os.getenv('VALARIFY_API')}/{id}"
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
                 if response.status == 200:
@@ -46,6 +54,7 @@ async def get_data(id: str) -> str:
                 else:
                     return "Failed to fetch data from API."
     except Exception as e:
+        logger.error("An error occurred: %s", e)
         return f"An error occurred: {e}"
 
 # HANDLE MESSAGE OF THE USER
@@ -53,34 +62,30 @@ async def handle_message(update: Update, context):
     message_type: str = update.message.chat.type
     text: str = update.message.text
 
-    print(f"User ({update.message.chat.id}) in {message_type}: '{text}'")
+    logger.info("User (%s) in %s: '%s'", update.message.chat.id, message_type, text)
 
     if message_type == "group":
         if BOT_USERNAME in text:
             new_text: str = text.replace(BOT_USERNAME, '').strip()
             song_id: str = search_id(new_text)
             response: str = await get_data(song_id)
-            print('Bot:', response)
+            logger.info('Bot: %s', response)
             await update.message.reply_text(response)
     else:
         song_id: str = search_id(text)
         response: str = await get_data(song_id)
-        print('Bot:', response)
+        logger.info('Bot: %s', response)
         await update.message.reply_text(response)
 
 # ERROR
 async def error(update: Update, context):
-    print(f"Update {update} caused error {context.error}")
+    logger.error("Update %s caused error %s", update, context.error)
 
 # MAIN
 if __name__ == '__main__':
     TOKEN: Final = os.getenv("VALARIFY_BOT_TOKEN")
-    BOT_USERNAME: Final = os.getenv("VALARIFY_BOT_USERNAME")
-    VALARIFY_API: Final = os.getenv("VALARIFY_API")
-    SPOTIFY_CLIENT_ID: Final = os.getenv("SPOTIFY_C_ID")
-    SPOTIFY_CLIENT_SECRET: Final = os.getenv("SPOTIFY_C_SECRET")
 
-    print("Bot is starting...")
+    logger.info("Bot is starting...")
 
     app = Application.builder().token(TOKEN).build()
 
@@ -94,5 +99,5 @@ if __name__ == '__main__':
     app.add_error_handler(error)
 
     # POLLING
-    print("Polling...") 
+    logger.info("Polling...")
     app.run_polling(poll_interval=3)
